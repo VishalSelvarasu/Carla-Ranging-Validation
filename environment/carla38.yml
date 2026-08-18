@@ -1,0 +1,16 @@
+# CARLA client environment. Python 3.8 is NOT optional -- the CARLA 0.9.15
+# Python API ships wheels for 3.7/3.8 only, and Ubuntu 24.04 defaults to 3.12.
+# This env only ever runs scripts/carla_capture.py.
+#
+#   conda env create -f environment/carla38.yml
+#   conda activate carla38
+name: carla38
+channels:
+  - conda-forge
+dependencies:
+  - python=3.8
+  - numpy=1.24
+  - pip
+  - pip:
+      - carla==0.9.15
+      - opencv-python==4.10.0.84

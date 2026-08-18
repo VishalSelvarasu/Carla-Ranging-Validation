@@ -1,0 +1,14 @@
+dataset/
+run_a/
+run_b/
+rt.png
+results/*.parquet
+results/*.csv
+results/*.png
+results/RESULTS_AUTO.md
+**/debug_*.png
+**/contact_sheet.png
+__pycache__/
+*.pyc
+*.pt
+runs/

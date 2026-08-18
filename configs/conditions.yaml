@@ -1,0 +1,33 @@
+baseline: ClearNoon
+
+conditions:
+  - name: ClearNoon
+    severity: 0
+    note: baseline
+  - name: CloudyNoon
+    severity: 1
+    note: diffuse light, reduced contrast
+  - name: WetNoon
+    severity: 2
+    note: road reflectance shift, no precipitation
+  - name: MidRainyNoon
+    severity: 3
+    note: precipitation + spray
+  - name: HardRainNoon
+    severity: 4
+    note: expected degradation onset
+  - name: ClearSunset
+    severity: 3
+    note: low sun, long shadows, glare
+  - name: ClearNight
+    severity: 4
+    note: headlights only, box bottom edge unreliable
+  - name: HardRainNight
+    severity: 5
+    note: worst case
+
+evaluation:
+  ttc_brake_threshold_s: 2.0
+  distance_bins_m: [[0, 20], [20, 40], [40, 60], [60, 100]]
+  min_visibility: 0.30
+  min_box_height_px: 16

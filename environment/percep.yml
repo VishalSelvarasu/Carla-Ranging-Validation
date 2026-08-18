@@ -1,0 +1,16 @@
+name: percep
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - pyarrow          # parquet
+  - matplotlib
+  - pyyaml
+  - pytest
+  - pip
+  - pip:
+      - opencv-python
+      - ultralytics    # YOLO11
+      - torch          # CPU wheel here; install the CUDA build separately
