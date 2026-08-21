@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 from __future__ import annotations
 
 import argparse
@@ -14,6 +13,14 @@ from .ranging import ESTIMATORS, estimate_all
 DIST_BINS = [(0, 20), (20, 40), (40, 60), (60, 100)]
 TTC_BRAKE_THRESHOLD_S = 2.0
 MIN_CLOSING_SPEED_MPS = 1.0
+
+# Frames with true TTC below this count as "approach phase" and are scored
+# individually. A single-target scenario yields ONE threshold crossing per run,
+# so brake latency has n=1 per condition per seed -- four seeds gave a
+# difference of only 1.2x the seed-to-seed spread, which supports no claim.
+# Scoring every approach frame instead gives ~60 samples per run from the same
+# data, still in seconds, still safety-framed.
+TTC_APPROACH_WINDOW_S = 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +103,51 @@ def range_summary(df):
                 rec[f"rmse_{lo}_{hi}m"] = (float(np.sqrt((err[m] ** 2).mean()))
                                            if m.sum() >= 10 else np.nan)
             out.append(rec)
+    return pd.DataFrame(out)
+
+
+# ---------------------------------------------------------------------------
+# Level 2b: per-frame TTC error over the approach
+# ---------------------------------------------------------------------------
+
+def ttc_summary(df, window=TTC_APPROACH_WINDOW_S):
+    """
+    TTC error on every frame where the true TTC is inside the approach window.
+
+    Sign convention matters more than magnitude here:
+      ttc_err > 0  -> estimated TTC is LONGER than true. The system believes it
+                      has more time than it does. Unsafe.
+      ttc_err < 0  -> conservative; costs comfort and false positives.
+
+    `late_frac` is the fraction of approach frames on the unsafe side. Unlike
+    brake latency it has hundreds of samples per condition, so a difference
+    across conditions can actually be defended.
+    """
+    m = df["ttc_true_s"].between(0, window)
+    g = df[m]
+    if g.empty:
+        return pd.DataFrame()
+
+    out = []
+    for (cond, ), grp in g.groupby(["condition"]):
+        for name in ESTIMATORS:
+            err = (grp[f"{name}_ttc_s"] - grp["ttc_true_s"]).replace(
+                [np.inf, -np.inf], np.nan).dropna()
+            if err.empty:
+                continue
+            out.append({
+                "condition": cond,
+                "estimator": name,
+                "n_frames": int(len(err)),
+                "mean_ttc_err_s": float(err.mean()),
+                "rmse_ttc_err_s": float((err ** 2).mean() ** 0.5),
+                "p95_ttc_err_s": float(err.quantile(0.95)),
+                "optimistic_frac": float((err > 0).mean()),
+                # Frames where the estimate is optimistic by more than a
+                # typical driver reaction time. This is the count that would
+                # matter to a safety case.
+                "over_250ms_frac": float((err > 0.25).mean()),
+            })
     return pd.DataFrame(out)
 
 
@@ -218,10 +270,12 @@ def main():
     df.to_parquet(os.path.join(args.out, "detections.parquet"))
 
     rng = range_summary(df)
+    ttc = ttc_summary(df)
     lat = brake_latency(df, args.threshold)
     lsum = latency_summary(lat)
 
     rng.to_csv(os.path.join(args.out, "range_summary.csv"), index=False)
+    ttc.to_csv(os.path.join(args.out, "ttc_summary.csv"), index=False)
     lat.to_csv(os.path.join(args.out, "brake_events.csv"), index=False)
     lsum.to_csv(os.path.join(args.out, "latency_summary.csv"), index=False)
 
@@ -229,6 +283,14 @@ def main():
     print("\n=== Range error by condition ===")
     print(rng[["condition", "estimator", "n", "absrel",
                "rmse_m", "bias_m", "invalid_frac"]].to_string(index=False))
+    if not ttc.empty:
+        print(f"\n=== TTC error over the approach (true TTC < "
+              f"{TTC_APPROACH_WINDOW_S}s) ===")
+        print("positive = estimate thinks there is MORE time than there is")
+        print(ttc[["condition", "estimator", "n_frames", "mean_ttc_err_s",
+                   "rmse_ttc_err_s", "optimistic_frac",
+                   "over_250ms_frac"]].to_string(index=False))
+
     print(f"\n=== Brake latency (TTC < {args.threshold}s) ===")
     print(lsum.to_string(index=False) if not lsum.empty else "no braking events")
 
