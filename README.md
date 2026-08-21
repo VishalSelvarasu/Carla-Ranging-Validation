@@ -1,277 +1,352 @@
-# carla-ranging-validation
+carla-ranging-validation
 
-**When does monocular range estimation become unsafe in bad weather?**
+When does monocular range estimation become unsafe in bad weather?
 
----
+A CARLA benchmark for camera-only vehicle ranging that measures failure in range error, TTC error, and brake timing, not detector mAP.
 
-## 1. Title and one-line pitch
+Main result: ground_plane range RMSE rises from 2.16 m in ClearNoon to 3.97 m in HardRainNight (1.84×), while mean bias grows from +1.05 m to +2.64 m (2.5×). The bias is positive, so the estimator reports the target as farther away than it really is — exactly the direction that produces optimistic TTC and late braking.
 
-> A reliability benchmark for monocular range estimation in CARLA, reporting
-> degradation not as detection accuracy but as **brake latency in seconds and
-> metres**.
 
-For your CV:
 
-> Built a scenario-based validation harness in CARLA measuring monocular
-> ranging degradation across 8 weather/lighting conditions on a bit-identical
-> ego trajectory, reporting failure as time-to-collision brake latency rather
-> than detection accuracy.
+The same failure shows up in TTC: for ground_plane, the share of approach frames with optimistic TTC error >250 ms rises from 8% in ClearNoon to 40% in HardRainNight. Across seeds 42, 43, 44, and 45, ClearNoon ranges from 5.8–11.1%, while HardRainNight ranges from 29.8–52.8%. The ranges do not overlap — every seed shows the effect.
 
----
+Why it fails
 
-## 2. Scope
+ground_plane estimates range from the bottom edge of the detected vehicle box under a flat-road assumption. That makes it sensitive to exactly the image region that gets messy in adverse weather: wet asphalt, headlight reflections, glare, and weak tire-road contrast can move the apparent contact point downward or upward by a few pixels.
 
-### What this does
+That pixel error turns into range error. In this experiment the error is mostly positive: the target is estimated too far away, so TTC is overestimated and the brake trigger moves later.
 
-A camera-only system estimates how far away the car in front is. That estimate
-gets worse in rain, at night, and into low sun. **This measures how much worse,
-and converts that into how late the brake command arrives.**
+height_prior behaves differently. It uses the detected box height plus a class-height prior, so it barely moves with weather compared with ground_plane. Its dominant error here is the class prior itself, not the weather condition.
 
-Two independent estimators run against exact CARLA depth ground truth across
-eight conditions. The ego drives a byte-identical path in every condition, so
-weather is the only variable.
+What is measured
 
-### What "done" looks like
+The pipeline runs a real vehicle detector, then evaluates three monocular range outputs:
 
-One sentence, quantified:
+ground_plane — range from the box bottom edge and road-plane geometry
 
-> Under `HardRainNight`, the ground-plane estimator crosses the 2.0 s brake
-> threshold **0.31 s late** — 4.3 m of extra travel at 50 km/h — and misses the
-> trigger entirely on 12% of closing events.
+height_prior — range from box height and a vehicle-height prior
 
-**If every estimator performs well in every condition, the project has failed.**
-A benchmark that finds no failure boundary has measured nothing. `src/report.py`
-checks for this and tells you when the condition matrix needs to be harsher.
+fused — uncertainty-weighted fusion of the two
 
-### Explicitly in scope
+CARLA depth and actor state provide the reference range. Closing speed comes from simulator ground truth, so TTC error isolates the contribution from range estimation rather than mixing in a separate velocity-estimation failure.
 
-- Deterministic, reproducible data capture (byte-identical across runs)
-- Occlusion-filtered ground truth from depth + semantic buffers
-- Two ranging estimators with uncertainty models, plus fusion
-- Range error → TTC error → brake latency
-- Honest documentation of what the benchmark cannot claim
+Why TTC error instead of mAP?
 
-### Explicitly out of scope
+mAP tells you whether the detector found the object and how well the box overlaps. It does not tell you whether a small box error makes the target look 2–4 m farther away, or whether that error moves a braking decision by a few hundred milliseconds.
 
-- **No ROS 2.** Nothing imports `rclpy`. Not needed at any phase.
-- **No Docker.** Native `CarlaUE4.exe` on Windows.
-- **No closed-loop control.** Ego speed and true range are both logged, so brake
-  latency is computed offline. Same result, none of the PID-tuning risk.
-- **No detector training** (that's optional Phase 5, after everything else works)
-- **No sim-to-real validation.** Condition *ordering* is trustworthy; absolute
-  numbers are not.
+That is why this repo reports:
 
-### Time
+range RMSE and signed bias
 
-Phases 0–4: **3–4 weeks** at student pace. Most of it in Phase 0 (determinism)
-and Phase 2 (label verification). Phase 5 only if those are finished.
+TTC error
 
----
+fraction of approach frames with optimistic TTC error >250 ms
 
-## 3. Prerequisites
+brake-trigger latency at the event level
 
-| | Need | Yours |
-|---|---|---|
-| GPU | NVIDIA ≥6 GB VRAM | RTX 4060 8GB — above spec at `-quality-level=Low` |
-| CPU | 6+ cores (the real bottleneck) | Ryzen 7 7435HS, 8C/16T — fine |
-| RAM | 16 GB min | |
-| Disk | ~30 GB | |
-| OS | Windows 10/11 | |
+Results
 
-**Install exactly two things:**
+Range error: the strongest result
 
-1. **CARLA 0.9.15** — download `CARLA_0.9.15.zip` from
-   [the 0.9.15 release](https://github.com/carla-simulator/carla/releases/tag/0.9.15).
-   Extract to a short path: `D:\CARLA_0.9.15`. Then:
-   ```powershell
-   [Environment]::SetEnvironmentVariable("CARLA_ROOT","D:\CARLA_0.9.15","User")
-   ```
-   Reopen PowerShell afterwards.
+Seeds 42, 43, 44, and 45 are pooled, with roughly 1,100 valid frames per condition.
 
-2. **Miniforge** (or Miniconda) — then `conda init powershell`, reopen the terminal.
+Condition
 
-Nothing else. **Not Docker, not Ubuntu, not WSL2, not ROS 2.**
+ground_plane RMSE
 
-> Docker only ever existed in this project as a workaround for running
-> Ubuntu-22.04-targeted CARLA binaries on Ubuntu 24.04. That's a Linux-only
-> problem. Windows has a native build.
+Mean bias
 
-### Knowledge assumed
+ClearNoon
 
-- Pinhole camera model, intrinsics, perspective projection
-- Homogeneous transforms — CARLA/Unreal is **left-handed** (x forward, y right, z up)
-- `TTC = range / closing_speed`
+2.16 m
 
----
++1.05 m
 
-## 4. Every file, and what it does
+HardRainNoon
 
-Two environments that never import each other. `carla38` runs Python 3.8 because
-the CARLA API requires it; `percep` runs 3.11 because modern NumPy/pandas/PyTorch
-do. **They communicate only through files in `dataset\`.** `run_all.ps1` switches
-between them via `conda run` — never activate one by hand.
+2.78 m
 
-```
-carla-ranging-validation\
-│
-├── run_all.ps1                  ← THE ONLY THING YOU RUN. Orchestrates all phases.
-│
-├── scripts\                     ══ CARLA side — env: carla38 (Python 3.8) ══
-│   ├── preflight.ps1                Checks GPU, driver, CARLA install, envs, disk,
-│   │                                power plan, and the semantic tag constant.
-│   │                                RUN THIS FIRST. Fails loudly and early.
-│   ├── start_server.ps1             Launches CarlaUE4.exe, polls until the RPC
-│   │                                port actually answers (not just "process alive").
-│   ├── carla_capture.py             THE CORE CAPTURE. Synchronous mode, seeded
-│   │                                traffic, frame-matched sensors, uint16 depth,
-│   │                                per-frame actor ground truth.
-│   └── run_matrix.ps1               Sweeps all 8 conditions, then verifies the ego
-│                                    trajectory is identical across every one.
-│
-├── src\                         ══ Analysis side — env: percep (Python 3.11) ══
-│   ├── config.py                    Loads conditions.yaml. Single source of truth —
-│   │                                both Python and PowerShell read conditions here.
-│   ├── labels.py                    Projects 3D actor boxes into the image, filters
-│   │                                occluded vehicles using depth + semantics,
-│   │                                emits true range. HIGHEST-RISK FILE.
-│   ├── ranging.py                   Two estimators + inverse-variance fusion, each
-│   │                                with an uncertainty model.
-│   ├── inspect_labels.py            Builds a contact sheet so you can eyeball label
-│   │                                quality in ten seconds instead of eight files.
-│   ├── evaluate.py                  Range error → TTC error → brake latency.
-│   └── report.py                    Figures + RESULTS_AUTO.md. Warns you if no
-│                                    failure boundary was found.
-│
-├── configs\conditions.yaml      The independent variable: 8 conditions with
-│                                severity ranks. EDIT HERE, nowhere else.
-│
-├── tests\test_geometry.py       12 synthetic geometry tests. No server needed,
-│                                runs in 1 second. Catches projection bugs before
-│                                they masquerade as perception results.
-│
-├── environment\
-│   ├── carla38.yml              Python 3.8 + carla 0.9.15 + opencv
-│   └── percep.yml               Python 3.11 + numpy/pandas/matplotlib/pytest
-│
-├── results\RESULTS.md           YOU WRITE THIS BY HAND. Template with empty tables.
-└── dataset\                     Generated. Gitignored. ~1.5 GB.
-```
++1.64 m
 
-### The three files that actually matter
+HardRainNight
 
-| File | Why |
-|---|---|
-| `scripts\carla_capture.py` | If capture isn't deterministic, nothing downstream means anything. |
-| `src\labels.py` | If ground truth is wrong, every result is confidently wrong. Errors here are silent. |
-| `src\evaluate.py` | Where range error becomes a safety number instead of a statistic. |
+3.97 m
 
----
++2.64 m
 
-## 5. How to run it
+From ClearNoon to HardRainNight, RMSE increases 1.84× and positive bias increases about 2.5×. The degradation is monotone across these severity anchors and is consistent with the TTC result below.
 
-### One-time setup
+TTC consequence
 
-```powershell
+Result
+
+Finding
+
+ground_plane, optimistic TTC error >250 ms
+
+8% → 40% of approach frames from ClearNoon to HardRainNight
+
+Seed consistency
+
+ClearNoon: 5.8–11.1%; HardRainNight: 29.8–52.8% across seeds 42–45; no overlap
+
+height_prior
+
+Seed-level results overlap
+
+fused
+
+Seed-level results overlap
+
+Brake latency
+
+n=5 events per condition; observed effect is only 1.2× the seed spread
+
+The frame-level range and TTC results are well powered. Brake latency is useful as a downstream interpretation, but with only five events per condition it is reported, not claimed as a robust effect.
+
+Condition matrix
+
+The experiment sweeps eight weather/lighting conditions from the clean baseline through heavy rain and night. The key severity anchors reported above are:
+
+ClearNoon
+
+HardRainNoon
+
+HardRainNight
+
+The complete matrix and its severity ordering live in configs/conditions.yaml; both the CARLA capture side and the analysis side read the same configuration.
+
+What this does not prove
+
+This repo does not claim that:
+
+brake latency is statistically well powered — there are only five events per condition
+
+height_prior or fused separate cleanly across seeds — they do not
+
+weather is the main source of height_prior error — class-prior mismatch dominates it here
+
+the result generalises beyond this map, route, camera, and stationary target
+
+the TTC numbers include closing-speed estimation uncertainty — closing speed comes from ground truth
+
+CARLA rain/night rendering is photometrically equivalent to real weather
+
+Reproduce
+
+Requirements
+
+Requirement
+
+Setup
+
+OS
+
+Windows 10/11
+
+CARLA
+
+0.9.15
+
+GPU
+
+NVIDIA, 6 GB VRAM minimum
+
+CPU
+
+6+ cores recommended
+
+RAM
+
+16 GB minimum
+
+Disk
+
+~30 GB free
+
+Python
+
+Conda/Miniforge
+
+The repo uses two environments:
+
+carla38 — Python 3.8 + CARLA API
+
+percep — detector + NumPy/pandas/PyTorch/analysis
+
+They communicate through files in dataset/.
+
+One-time setup
+
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 
 conda env create -f environment\carla38.yml
 conda env create -f environment\percep.yml
 
+Set CARLA_ROOT to the CARLA 0.9.15 install directory, then exclude the generated dataset from Defender if real-time scanning is slowing capture:
+
 Add-MpPreference -ExclusionPath (Join-Path (Get-Location) "dataset")
-```
 
-The Defender exclusion is not optional advice — a 500-frame matrix writes ~16,000
-small files, and real-time scanning on every write can roughly double capture time.
+Start CARLA
 
-### Every session
+.\scripts\preflight.ps1
+.\scripts\start_server.ps1
+.\scripts\preflight.ps1
 
-```powershell
-.\scripts\preflight.ps1        # fix every FAIL before continuing
-.\scripts\start_server.ps1     # ~60s to load
-.\scripts\preflight.ps1        # again — only now can it verify the semantic tag
-```
+The second preflight is intentional: some checks require a live CARLA server.
 
-### The pipeline
+Run the full experiment
 
-```powershell
-.\run_all.ps1 -Frames 100      # SHORT FIRST PASS — do this before the real run
-```
+The reference experiment uses 300 frames per capture and four seeds: 42, 43, 44, and 45.
 
-Once that completes cleanly end to end:
+run_all.ps1 runs the end-to-end pipeline for the default seed (42):
 
-```powershell
-Remove-Item -Recurse -Force .\dataset, .\results
-.\run_all.ps1                  # full 500-frame run
-```
+.\run_all.ps1 -Frames 300
 
-Resume after a gate: `.\run_all.ps1 -From 2`. Single phase: `-Only 3`.
+Capture the remaining seeded matrices separately so each run has its own output directory:
 
-**Run the 100-frame pass first.** Phase 0 tells you within two minutes whether
-determinism holds. Discovering it doesn't after a 15-minute matrix is wasted time.
+.\scripts\run_matrix.ps1 -Seed 43 -Out .\dataset_s43
+.\scripts\run_matrix.ps1 -Seed 44 -Out .\dataset_s44
+.\scripts\run_matrix.ps1 -Seed 45 -Out .\dataset_s45
 
----
+The equivalent pattern for any seed is:
 
-## 6. The five phases
+.\scripts\run_matrix.ps1 -Seed N -Out .\dataset_sN
 
-| Phase | Does | Acceptance test | Env |
-|---|---|---|---|
-| **0** | Captures the same run twice | File hashes byte-identical | carla38 |
-| **1** | Sweeps 8 weather conditions | Ego trajectory identical across all | carla38 |
-| **2** | Generates ground-truth labels | **You open the images and look** | percep |
-| **3** | Computes error + brake latency | Degradation trend visible; something fails | percep |
-| **4** | Figures + report | You write the argument | percep |
-| **5** | *(optional)* Real detector | Only after 0–4 are done | percep |
+A single 300-frame matrix is roughly 10 minutes on the reference machine. Reproducing all four seeds plus the four CPU detector passes (about 8 minutes each) is about one hour end to end, excluding one-time environment setup.
 
-`run_all.ps1` pauses at each gate and asks. Answer honestly — `-Yes` exists for
-re-runs after you've already verified, not for the first pass.
+The determinism check compares ego/NPC state and trajectory, not sensor-file hashes. Exact bytes are not required; controlled simulator state is.
 
-### The two gates that need your eyes, not the exit code
+Pipeline
 
-**Phase 1:** the trajectory check must report identical ego paths. If it doesn't,
-weather is confounded with route and every later number is meaningless.
+Stage
 
-**Phase 2:** open `dataset\ClearNoon\debug_000042.png` and
-`dataset\contact_sheet.png`. Check that boxes sit **on** the vehicles, that no box
-is drawn on a car hidden behind a building, and that ranges look plausible.
+What it does
 
-This is the highest-risk step in the project. A wrong semantic tag, a dropped
-bbox offset, or a mis-remapped axis all produce plausible-looking numbers and a
-completely invalid benchmark. `preflight.ps1` verifies the semantic tag against
-your live build for exactly this reason.
+Acceptance check
 
----
+Determinism
 
-## 7. Bugs already found by testing against known answers
+repeats controlled runs
 
-Two bugs surfaced during development, both of which produced *plausible numbers
-rather than crashes*:
+ego/NPC state and trajectory agree
 
-1. **Range definition.** The projected 2D box is sized by the near face of the 3D
-   box, but true range was defined as the centroid — a constant −2.4 m bias,
-   larger than the weather effect being measured. It would have looked like a bad
-   height prior.
-2. **Degradation check.** The "no failure boundary" warning pooled all rows, so
-   variation *between estimators* masked zero variation *between conditions*. The
-   check designed to catch a null result would itself have silently failed.
+Capture matrix
 
-Both caught by testing against data with a known answer. Keep that habit — it's
-the thing that makes this repo worth showing.
+sweeps weather/lighting conditions across seeds
 
----
+route and traffic state stay comparable
 
-## 8. Limitations to state in your writeup
+Labels
 
-Listing these is what separates a benchmark from a demo. A reviewer will find
-them whether or not you do.
+builds depth/semantic reference labels
 
-1. **Closing speed comes from ground truth.** Only range error propagates into
-   TTC, so reported latencies are a **lower bound**.
-2. **Sim-to-real gap unquantified.** CARLA's rain and night rendering aren't
-   photometrically validated. Condition *ordering* is more trustworthy than
-   absolute values.
-3. **`-quality-level=Low`** changes lighting and shadows. Recorded in
-   `run_config.json`; every result is conditioned on it.
-4. **Fusion assumes independent errors.** They aren't, once the bounding box
-   itself degrades — which is exactly the regime of interest.
-5. **Class priors are coarse** — a five-class heuristic from blueprint IDs.
-6. **Single map, single route.** Not shown to generalise across road geometry.
+overlays and diagnostics look correct
+
+Detection
+
+runs the detector used by the experiment
+
+detections and label diagnostics pass
+
+Ranging
+
+computes ground_plane, height_prior, and fused
+
+outputs are complete and internally consistent
+
+Evaluation
+
+computes range error, TTC error, and brake latency
+
+no missing/invalid approach events
+
+Seed pooling
+
+aggregates the four runs without hiding spread
+
+endpoint separation is visible where claimed
+
+Report
+
+writes figures and result tables
+
+numbers match pooled outputs
+
+Repository layout
+
+Capture / CARLA side
+
+run_all.ps1 — orchestrates the complete pipeline.
+
+scripts/preflight.ps1 — checks the CARLA install, environments, hardware assumptions, disk space, and live-server dependencies.
+
+scripts/start_server.ps1 — starts CarlaUE4.exe and waits for RPC to respond.
+
+scripts/carla_capture.py — synchronous capture, seeded actors, sensor frames, and per-frame ground truth.
+
+scripts/run_matrix.ps1 — sweeps the configured condition matrix.
+
+scripts/verify_determinism.py — compares ego/NPC state and trajectory across repeated runs.
+
+scripts/diagnose_labels.py — targeted diagnostics for suspicious ground-truth labels.
+
+scripts/depth_edge_test.py — checks depth discontinuities around object boundaries.
+
+Perception / analysis side
+
+src/config.py — loads configs/conditions.yaml.
+
+src/labels.py — projects actors into the image and builds depth/semantic reference labels.
+
+src/detect.py — runs the vehicle detector used by the benchmark.
+
+src/ranging.py — implements ground_plane, height_prior, uncertainty models, and fusion.
+
+src/evaluate.py — converts range error into TTC error and brake-trigger timing.
+
+src/pool_seeds.py — pools the four seeded runs while preserving seed spread.
+
+src/inspect_labels.py — creates quick visual checks for label quality.
+
+src/report.py — generates figures and result tables.
+
+Config / tests / outputs
+
+configs/conditions.yaml — eight-condition weather/lighting matrix and severity ordering.
+
+tests/test_geometry.py — synthetic geometry tests; no CARLA server required.
+
+environment/carla38.yml — CARLA-side environment.
+
+environment/percep.yml — detector/analysis environment.
+
+results/RESULTS.md — measured result summary.
+
+results/fig1_range_error_vs_severity.png — headline range-error figure.
+
+dataset/ — generated capture data; gitignored.
+
+What broke during development
+
+Several bugs were found by testing against known answers rather than trusting plausible-looking plots. Two were especially important because neither caused a crash.
+
+Range was referenced to the wrong part of the vehicle. The projected 2D box was effectively tied to the near face of the 3D box, while true range was taken to the centroid. That introduced about 2.4 m of systematic offset — larger than the weather effect being measured — and initially looked like an estimator problem.
+
+The degradation check pooled the wrong variation. The original “no failure boundary” check mixed variation between estimators with variation between conditions. Estimators could differ strongly while weather had no effect, and the check would still pass.
+
+Both are the kind of validation bug that produces convincing numbers instead of exceptions. The tests and diagnostic scripts in this repo exist largely to catch that class of failure.
+
+Limitations
+
+Brake latency is underpowered. n=5 events per condition, with an effect only 1.2× the seed spread. It is reported, not treated as a strong claim.
+
+Only ground_plane separates cleanly across seeds. height_prior and fused overlap.
+
+height_prior is prior-limited. Its error is dominated by class-height mismatch rather than weather.
+
+One stationary target, one map, one route. This is a controlled failure study, not a generalisation benchmark.
+
+Closing speed comes from ground truth. TTC error therefore excludes velocity-estimation error and should be read as a lower bound for a fully estimated stack.
+
+CARLA weather is not photometrically validated against the real world. The simulator is useful for controlled relative comparisons; the absolute degradation should not be transferred directly to real rain or night driving.
