@@ -12,3 +12,6 @@ __pycache__/
 *.pyc
 *.pt
 runs/
+dataset_s*/
+results_s*/
+results_pooled/

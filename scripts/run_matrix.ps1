@@ -4,7 +4,7 @@ param(
     [int]$Frames = 200,
     [string]$Map = "Town10HD_Opt",
     [double]$Fov = 60.0,
-    [string]$LeadDistances = "30,45,60,80",
+    [string]$LeadDistances = "90",
     [int]$Port = 2000
 )
 
