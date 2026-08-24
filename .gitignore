@@ -17,3 +17,8 @@ results_s*/
 results_pooled/
 results/*.avi
 results/*.mp4
+
+results/RESULTS_AUTO.md
+results/fig1_single_seed_uncapped.png
+results/fig2_error_by_distance.png
+results/fig3_brake_latency.png
