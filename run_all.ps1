@@ -57,8 +57,6 @@ if (Runs 0) {
     else {
         Write-Host "  FAIL: see the diagnosis above." -ForegroundColor Red
         Write-Host "  run_a and run_b are kept for inspection."
-        Write-Host "  run_a is reproducible, run_b is not. Compare the two to find the source of non-determinism."
-        Write-Host "  run_b is the one to fix, run_a is the reference."
         exit 1
     }
 }
@@ -105,7 +103,8 @@ if (Runs 2) {
 if (Runs 3) {
     Banner 3 "evaluation"
     New-Item -ItemType Directory -Force -Path $Results | Out-Null
-    Per python -m src.evaluate --dataset $Dataset --out $Results
+    Per python -m src.detect --dataset $Dataset
+    Per python -m src.evaluate --dataset $Dataset --labels detections.json --out $Results
     Gate "Degradation trend visible, and at least one condition genuinely fails?" 3
 }
  
@@ -113,6 +112,15 @@ if (Runs 3) {
 if (Runs 4) {
     Banner 4 "report"
     Per python -m src.report --results $Results
+    # Four-seed pooled headline. Skipped if the other seeds have not been run --
+    # the headline is a four-seed claim, not something one run can produce.
+    if ((Test-Path .\results_s43) -and (Test-Path .\results_s44) -and (Test-Path .\results_s45)) {
+        Per python -m src.make_headline
+    }
+    else {
+        Write-Host "  Skipping pooled headline: run seeds 43-45 first, then"
+        Write-Host "  conda run -n percep python -m src.make_headline"
+    }
     Write-Host ""
     Write-Host "  Figures and RESULTS_AUTO.md are in $Results\"
     Write-Host "  Now write results\RESULTS.md by hand -- sections 4, 5 and 6 are the"

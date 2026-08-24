@@ -1,0 +1,9 @@
+condition,n,height_prior_rmse,height_prior_bias,ground_plane_rmse,ground_plane_bias,fused_rmse,fused_bias
+ClearNoon,825,5.768,-0.345,1.535,1.016,2.532,0.165
+CloudyNoon,837,5.891,-0.289,1.476,1.027,2.521,0.219
+WetNoon,825,5.796,-0.354,1.535,1.04,2.566,0.203
+ClearSunset,826,5.752,-0.413,1.607,1.014,2.533,0.18
+MidRainyNoon,818,5.982,-0.286,1.553,1.112,2.571,0.279
+ClearNight,815,5.84,-0.206,1.648,1.119,2.531,0.271
+HardRainNoon,837,6.245,0.097,2.262,1.537,2.921,0.661
+HardRainNight,795,6.993,1.67,3.32,2.384,3.528,1.6
