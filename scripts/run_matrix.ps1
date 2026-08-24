@@ -1,7 +1,7 @@
 param(
     [string]$Out = ".\dataset",
     [int]$Seed = 42,
-    [int]$Frames = 200,
+    [int]$Frames = 300,
     [string]$Map = "Town10HD_Opt",
     [double]$Fov = 60.0,
     [string]$LeadDistances = "90",

@@ -2,7 +2,7 @@ param(
     [int]$From = 0,
     [int]$Only = -1,
     [switch]$Yes,
-    [int]$Frames = 500,
+    [int]$Frames = 300,
     [int]$Seed = 42,
     [string]$Map = "Town10HD_Opt"
 )
