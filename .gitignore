@@ -15,3 +15,5 @@ runs/
 dataset_s*/
 results_s*/
 results_pooled/
+results/*.avi
+results/*.mp4
