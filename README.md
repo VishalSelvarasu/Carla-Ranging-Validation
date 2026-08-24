@@ -1,18 +1,18 @@
 # Carla-Ranging-Validation
 
-## Heavy rain/night makes ground-plane ranging more optimistic: capped RMSE rises 1.54 → 3.33 m and >250 ms TTC optimism rises 8% → 40%
+## Heavy rain/night makes ground-plane ranging more optimistic: capped RMSE rises 1.54 → 3.32 m and >250 ms TTC optimism rises 8% → 40%
 
 A CARLA benchmark for camera-only vehicle ranging that measures detector recall, range error, TTC error, and brake timing — and explicitly checks whether apparent weather effects survive seed-level and range-band validation.
 
 The perception front end is YOLO11s, COCO-pretrained and used zero-shot, with no fine-tuning on CARLA. Downstream range/TTC statistics are therefore conditional on detections that survive the detector, so detector behavior is reported alongside ranging rather than treated as a fixed upstream stage.
 
-**Main result.** Pooling seeds 42, 43, 44, and 45 and restricting the headline comparison to `true_range_m < 40`, `ground_plane` RMSE rises from **1.54 m** in ClearNoon to **2.27 m** in HardRainNoon and **3.33 m** in HardRainNight. Mean signed bias rises from **+1.02 m** to **+1.54 m** to **+2.39 m**. From baseline to HardRainNight that is a **2.16× increase in RMSE** and a **2.34× increase in positive bias**.
+**Main result.** Pooling seeds 42, 43, 44, and 45 and restricting the headline comparison to `true_range_m < 40`, `ground_plane` RMSE rises from **1.54 m** in ClearNoon to **2.26 m** in HardRainNoon and **3.32 m** in HardRainNight. Mean signed bias rises from **+1.02 m** to **+1.54 m** to **+2.38 m**. From baseline to HardRainNight that is a **2.16× increase in RMSE** and a **2.35× increase in positive bias**.
 
-Inside 40 m the retained sample count is nearly constant — **825 / 837 / 795** detections for ClearNoon / HardRainNoon / HardRainNight — so the capped comparison is much closer to like-for-like than the uncapped comparison. The cap also avoids leaning on unreliable far-field ground-plane geometry: in seed 43, **ClearNoon already has +5.44 m mean error at 60–90 m**, worse than several adverse-weather bands.
+Inside 40 m the retained sample count is nearly constant — **825 / 837 / 795** detections for ClearNoon / HardRainNoon / HardRainNight — so the capped comparison is much closer to like-for-like than the uncapped comparison. The cap also avoids leaning on unreliable far-field ground-plane geometry: in seed 43, **ClearNoon already has +6.17 m mean error at 60–90 m**, worse than several adverse-weather bands.
 
 The downstream consequence is consistent across seeds. The share of TTC-window frames with optimistic `ground_plane` TTC error >250 ms rises from **8% in ClearNoon to 40% in HardRainNight**. Across seeds 42–45, ClearNoon ranges from **5.8–11.1%** while HardRainNight ranges from **29.8–52.8%**; the seed ranges do not overlap.
 
-The range-band result is directional rather than a universal gradient. For every observed seed × range-band comparison, HardRainNight has a more positive mean `ground_plane` error than ClearNoon, but the magnitude depends strongly on seed. The data do **not** support a claim that degradation monotonically increases with distance.
+The range-band result is directional rather than a universal gradient. **Fifteen of sixteen** seed × range-band comparisons have a more positive mean `ground_plane` error in HardRainNight than in ClearNoon. The lone exception is seed 45 at 40–60 m (**−0.40 m**), where ClearNoon's own mean error is unusually high (**+3.19 m**). The data do **not** support a claim that degradation monotonically increases with distance.
 
 ## Why `ground_plane` fails
 
@@ -61,10 +61,10 @@ Seeds 42, 43, 44, and 45 are pooled. Headline range statistics use only detectio
 | Condition | n (`true_range_m < 40`) | `ground_plane` RMSE | Mean bias |
 | --- | ---: | ---: | ---: |
 | ClearNoon | 825 | **1.54 m** | **+1.02 m** |
-| HardRainNoon | 837 | **2.27 m** | **+1.54 m** |
-| HardRainNight | 795 | **3.33 m** | **+2.39 m** |
+| HardRainNoon | 837 | **2.26 m** | **+1.54 m** |
+| HardRainNight | 795 | **3.32 m** | **+2.38 m** |
 
-From ClearNoon to HardRainNight, RMSE increases **2.16×** and positive bias increases **2.34×**. The progression is monotone across the three severity anchors.
+From ClearNoon to HardRainNight, RMSE increases **2.16×** and positive bias increases **2.35×**. The progression is monotone across the three severity anchors.
 
 The cap is not cosmetic. Within 40 m the detector retains a near-constant number of observations across conditions (**825 / 837 / 795**), making the comparison substantially more like-for-like. Outside that region, far-field `ground_plane` error is already large in clean conditions and detector population shifts can distort uncapped comparisons. In seed 45 specifically, dropout removes distant high-error detections strongly enough to flatter HardRainNight; that behavior does not replicate in every seed.
 
@@ -76,20 +76,20 @@ The table below reports the HardRainNight minus ClearNoon difference in mean `gr
 
 | Range band | Seed 42 | Seed 43 | Seed 44 | Seed 45 |
 | --- | ---: | ---: | ---: | ---: |
-| 60–90 m | — | +0.33 m | **+8.25 m** | **+8.07 m** |
-| 40–60 m | +1.29 m | +1.39 m | +4.47 m | +1.41 m |
-| 20–40 m | +0.31 m | **+2.36 m** | +1.44 m | +0.82 m |
-| 0–20 m | +0.48 m | +1.12 m | +0.38 m | +0.55 m |
+| 60–90 m | +8.36 m | +0.47 m | +8.22 m | +5.56 m |
+| 40–60 m | +3.31 m | +1.32 m | +5.30 m | **−0.40 m** |
+| 20–40 m | +0.50 m | +2.50 m | +2.63 m | +1.02 m |
+| 0–20 m | +0.48 m | +1.06 m | +0.42 m | +0.55 m |
 
-Every **observed** seed × band difference is positive: HardRainNight makes `ground_plane` more optimistic than ClearNoon throughout the evaluated range. The magnitude, however, is seed-dependent.
+**Fifteen of sixteen** seed × band comparisons are positive. The exception is seed 45 at 40–60 m (**−0.40 m**), where ClearNoon's own error in that band is unusually high (**+3.19 m**, roughly double any other seed's baseline) rather than HardRainNight's being unusually low.
 
-The data do **not** support a universal distance gradient. Seed 43 is nearly flat at 60–90 m (**+0.33 m**) and peaks at 20–40 m (**+2.36 m**). Seed 45's +8.07 m far-field difference rests on only **n=5**. Seed 42 has no 60–90 m estimate. Two seeds show a strong far-field increase, one contradicts the proposed gradient, and one has no far-field data.
+The data do **not** support a universal distance gradient. Three seeds show a strong far-field increase; seed 43 is nearly flat at 60–90 m (**+0.47 m**) and peaks at 20–40 m (**+2.50 m**). Three-for-one is not replication, so the monotonic-distance claim remains rejected.
 
-A second reason not to make the far field the headline is that clean-weather `ground_plane` ranging is already poor there: **ClearNoon at 60–90 m has +5.44 m mean error in seed 43**. That independently supports the 40 m headline cap.
+A second reason not to make the far field the headline is that clean-weather `ground_plane` ranging is already poor there: **ClearNoon at 60–90 m has +6.17 m mean error in seed 43**. That independently supports the 40 m headline cap.
 
 ## Detector recall
 
-Detector recall degrades in adverse conditions, but the downstream survivorship pattern is not identical across seeds. As anchor examples, seed 42 falls from **97.1% to 81.6%** from ClearNoon to HardRainNight, while seed 45 falls from **89.2% to 55.4%**.
+Detector recall degrades in adverse conditions, but the downstream survivorship pattern is not identical across seeds. As anchor examples, seed 42 falls from **97.1% to 80.7%** from ClearNoon to HardRainNight, while seed 45 falls from **89.2% to 55.4%**.
 
 The important interpretation is not that heavy rain always deletes the same distant population. It is that missed detections can change which observations reach the range/TTC evaluator, so seed-level population checks are required before interpreting uncapped downstream metrics.
 
@@ -135,10 +135,11 @@ This repo does not claim that:
 
 - range degradation grows monotonically with distance — the seed-level range-band gradient does not replicate
 - adverse weather always removes a disproportionately distant population — the strong survivorship reversal is demonstrated in seed 45, not every seed
-- the degradation is concentrated only in the near field — positive HardRainNight–ClearNoon differences occur across observed bands
+- the degradation is concentrated only in the near field — 15 of 16 HardRainNight–ClearNoon seed × band differences are positive across the evaluated range
 - brake latency is statistically well powered — there are only five events across four seeds
-- `height_prior` or `fused` separate cleanly across seeds — they do not
-- weather is the main source of `height_prior` error — class-prior mismatch dominates it here
+- `height_prior` generally overtakes `ground_plane` at long range because of a Z² crossover — it does not; `height_prior` wins only **8 of 128** seed × condition × band comparisons, and all eight occur in adverse conditions rather than clustering at long range
+- `height_prior` or `fused` separate cleanly across seeds in the TTC analysis — they do not; the range-band analysis nevertheless shows that estimator ordering can flip locally under severe weather
+- weather is the main source of `height_prior` error — class-prior mismatch still dominates its absolute error here
 - the result generalises beyond this map, fixed seeded route, 20 background NPCs plus one spawned stationary target, camera, detector, or `-quality-level=Low` rendering configuration
 - the TTC window is a pure moving-lead-vehicle benchmark — 597/645 observations (92%) are stationary vehicles
 - TTC numbers include closing-speed estimation uncertainty — closing speed comes from ground truth
@@ -219,13 +220,14 @@ The equivalent pattern for another seed is:
 
 ## Labels, detection, evaluation, and pooling for seeds 43–45
 
-Each additional seed goes through labels → YOLO11s detection → ranging/evaluation, then all four result directories are pooled.
+Each additional seed goes through labels → YOLO11s detection → ranging/evaluation, then all four result directories are pooled and `src.make_headline` regenerates the published 40 m figure and compact summary CSVs.
 
 ```powershell
 foreach ($s in 43,44,45) { Get-ChildItem ".\dataset_s$s" -Directory | ForEach-Object { conda run -n percep python -m src.labels --run $_.FullName } }
 foreach ($s in 43,44,45) { conda run --no-capture-output -n percep python -m src.detect --dataset ".\dataset_s$s" }
 foreach ($s in 43,44,45) { conda run --no-capture-output -n percep python -m src.evaluate --dataset ".\dataset_s$s" --labels detections.json --out ".\results_s$s" }
 conda run --no-capture-output -n percep python -m src.pool_seeds --results results results_s43 results_s44 results_s45
+conda run --no-capture-output -n percep python -m src.make_headline
 ```
 
 Reproduce the published 40 m capped headline table:
@@ -240,8 +242,8 @@ Expected headline output:
                   n  rmse  bias
 condition
 ClearNoon      825.0  1.54  1.02
-HardRainNoon   837.0  2.27  1.54
-HardRainNight  795.0  3.33  2.39
+HardRainNoon   837.0  2.26  1.54
+HardRainNight  795.0  3.32  2.38
 ```
 
 A single 300-frame matrix is roughly 10 minutes on the reference machine. Reproducing all four seeds plus the CPU detector passes is roughly one hour end to end, excluding one-time environment setup.
@@ -305,18 +307,18 @@ The determinism check compares ego/NPC state and trajectory, not sensor-file has
 - `results_s*/` — generated seed-specific analysis outputs; gitignored.
 - `results_pooled/` — contains the committed compact pooled summary CSVs listed above.
 
-# Validation engineering: claims the data rejected
+# Validation engineering: claims the data tested
 
-The strongest part of this benchmark is not a single effect size; it is the sequence of plausible claims that were tested against seed-level data and rejected when they did not hold.
+The strongest part of this benchmark is not a single effect size; it is the sequence of plausible claims that were tested against seed-level data, then rejected, narrowed, or reinterpreted when the predicted mechanism did not hold.
 
 | Hypothesis | Validation outcome |
 | --- | --- |
-| **Z² crossover** | Not supported. `height_prior` was predicted to beat `ground_plane` at distance because ground-plane uncertainty grows approximately as Z²; it does not beat `ground_plane` in any evaluated range band in any seed. |
-| **Near-field concentration** | Not supported. HardRainNight–ClearNoon `ground_plane` differences are positive across observed range bands, not confined to the near field. |
+| **Z² crossover** | Partially supported, but not by the predicted mechanism. `height_prior` was expected to beat `ground_plane` at long range because ground-plane uncertainty grows approximately as Z². It wins in **8 of 128** seed × condition × band comparisons, but these cluster by *condition* rather than range — all eight are HardRainNoon, MidRainyNoon, or HardRainNight, and one is at 0–20 m. The crossover is driven by weather degrading the box bottom edge, not by the Z² term. |
+| **Near-field concentration** | Not supported. Fifteen of sixteen HardRainNight–ClearNoon seed × band differences are positive across the evaluated range, so the effect is not confined to the near field. |
 | **Universal survivorship mechanism** | Not supported. Seed 45 shows strong distant high-error dropout, but seed 44 has more far-field detections in HardRainNight (44) than ClearNoon (20). |
-| **Range degradation grows monotonically with distance** | Not supported. Seed 43 peaks at 20–40 m and is nearly flat at 60–90 m; seed 45's far-field estimate is based on `n=5`. |
+| **Range degradation grows monotonically with distance** | Not supported. Three seeds show a strong far-field increase, but seed 43 peaks at 20–40 m (+2.50 m) and is nearly flat at 60–90 m (+0.47 m). |
 
-These failures are useful. Each claim was decided by an executable check rather than by choosing the most convenient interpretation. The final result is therefore narrower but stronger: within 40 m, pooled `ground_plane` error increases monotonically with severity, and at the seed/range-band level the **direction** of the HardRainNight shift is consistent while its **magnitude and distance profile are seed-dependent**.
+These checks are useful because they separate the observed effect from the mechanism originally expected. The final result is narrower but stronger: within 40 m, pooled `ground_plane` error increases monotonically with severity; at the seed/range-band level HardRainNight is more optimistic in **15 of 16** comparisons; and the rare `height_prior` crossovers cluster under adverse weather rather than at long range, pointing to weather sensitivity of the box-bottom geometry rather than a universal Z² distance crossover.
 
 Earlier development also exposed implementation/evaluation traps that could have produced convincing but wrong results:
 
@@ -331,10 +333,11 @@ These are the kinds of validation failures that produce plausible numbers instea
 
 - **Headline range metrics are range-capped.** The main comparison uses `true_range_m < 40`. This improves population comparability and avoids leaning on a far field where `ground_plane` is already unreliable in clean weather.
 - **Detector behavior is seed-dependent.** Recall degrades under adverse weather, but the distance distribution of dropout is not universal across seeds.
-- **The range-band direction is stronger than the range-band shape.** Observed HardRainNight–ClearNoon differences are positive across bands, but there is no reproducible monotonic range gradient.
+- **The range-band direction is stronger than the range-band shape.** HardRainNight–ClearNoon differences are positive in 15 of 16 seed × band comparisons, but there is no reproducible monotonic range gradient.
 - **Brake latency is underpowered.** There are only five events across four seeds, with an observed effect only 1.2× the seed spread.
-- **Only `ground_plane` separates cleanly across seeds.** `height_prior` and `fused` overlap.
-- **`height_prior` is prior-limited.** Its error is dominated by class-height mismatch rather than weather.
+- **Only `ground_plane` separates cleanly across seeds in the TTC-level comparison.** `height_prior` and `fused` overlap at that level, although the range-band data show local estimator-ordering reversals under adverse conditions: `height_prior` beats `ground_plane` in **8 of 128** seed × condition × band comparisons.
+- **The `height_prior` crossovers are weather-clustered, not distance-clustered.** All eight occur in HardRainNoon, MidRainyNoon, or HardRainNight, including one at 0–20 m, so they do not support the predicted long-range Z² mechanism.
+- **`height_prior` is still prior-limited in absolute error.** Its dominant error source remains class-height mismatch; the adverse-weather crossovers occur because `ground_plane` degrades more strongly, not because the height prior becomes intrinsically accurate.
 - **The scenario is controlled but not single-target-only.** It is one map and one fixed seeded route through 20 background NPCs plus one spawned stationary target.
 - **The TTC window is mostly stationary vehicles.** 597/645 observations (92%) in frames with `true TTC < 5 s` are stationary vehicles.
 - **The effective measurement range is ~65 m to contact, not 90 m.** At 60° FOV (`fy ≈ 693`), a 1.5 m car falls below the 16 px height floor beyond roughly 65 m.

@@ -80,9 +80,13 @@ def band_table(df_all):
             m = g["true_range_m"].between(lo, hi, inclusive="left")
             if m.sum() == 0:
                 continue
-            rows.append({"dataset": src, "condition": cond,
-                         "band": f"{lo}-{hi}m", "n": int(m.sum()),
-                         "mean_err_m": float(g.loc[m, "ground_plane_err_m"].mean())})
+            rec = {"dataset": src, "condition": cond,
+                   "band": f"{lo}-{hi}m", "n": int(m.sum())}
+            for e in ESTIMATORS:
+                rec[f"{e}_mean_err_m"] = float(g.loc[m, f"{e}_err_m"].mean())
+                rec[f"{e}_rmse_m"] = float(
+                    (g.loc[m, f"{e}_err_m"] ** 2).mean() ** 0.5)
+            rows.append(rec)
     return pd.DataFrame(rows)
 
 
