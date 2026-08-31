@@ -113,7 +113,7 @@ Static frame:
 
 ![Qualitative comparison frame](results/comparison_frame.png)
 
-GitHub-renderable animation:
+Rendered animation:
 
 ![Qualitative comparison across conditions](results/comparison.gif)
 
