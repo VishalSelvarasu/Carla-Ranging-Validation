@@ -62,6 +62,8 @@ def match(gt_objects, dets):
             "bbox_width_px": x2 - x1,
             "det_confidence": d["conf"],
             "det_iou": v,
+            # detector's class, not CARLA's
+            "det_class": d["coco_class"],
             "gt_bbox": g["bbox"],                  # kept for error analysis
             "gt_bbox_height_px": g["bbox_height_px"],
         })

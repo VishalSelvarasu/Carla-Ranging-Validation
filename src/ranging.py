@@ -123,11 +123,15 @@ def estimate_all(obj, intr, camera_height_m):
     """
     All three estimates for one detection.
 
-    `obj` needs: bbox [x1,y1,x2,y2], bbox_height_px, type_id.
+    `obj` needs: bbox [x1,y1,x2,y2], bbox_height_px, det_class (detector) or
+    type_id (fallback for GT-box runs).
     Uses only what a real pipeline would have -- never obj['true_range_m'].
     """
     fy, cy = intr["fy"], intr["cy"]
-    cls = classify(obj["type_id"])
+    # Detector-predicted class when available. type_id is CARLA's actor
+    # identity and a camera-only system would not have it; keeping it as a
+    # fallback only so GT-box evaluation still runs.
+    cls = obj.get("det_class") or classify(obj["type_id"])
     h_px = obj["bbox_height_px"]
     v_bottom = obj["bbox"][3]
 
