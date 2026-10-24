@@ -74,7 +74,7 @@ def main():
     ap.add_argument("--ref-speed", type=float, default=8.0,
                     help="Reference ego speed (m/s) for converting pooled "
                          "latency into metres. Report it alongside the number.")
-    ap.add_argument("--range-cutoff", type=float, default=60.0,
+    ap.add_argument("--range-cutoff", type=float, default=40.0,
                     help="Cap range so conditions are compared over the same "
                          "distribution. Where the detector finds nothing at "
                          "distance those samples are absent, not counted as "
